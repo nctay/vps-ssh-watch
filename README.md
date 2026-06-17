@@ -2,7 +2,7 @@
 
 Free VPS availability monitor via GitHub Actions.
 
-Every 10 minutes it tries to connect to the VPS over SSH. If SSH is unavailable, it sends a Telegram message.
+Every 10 minutes it tries to connect to each VPS over SSH. If SSH is unavailable, it sends a Telegram message.
 
 ## Files
 
@@ -39,17 +39,29 @@ Settings -> Secrets and variables -> Actions -> New repository secret
 Add:
 
 ```text
-VPS_HOST
-VPS_USER
-VPS_PORT
+VPS_LIST
 VPS_SSH_KEY
 TELEGRAM_BOT_TOKEN
 TELEGRAM_CHAT_ID
 ```
 
-`VPS_PORT` can be omitted if SSH uses port `22`.
+`VPS_LIST` is a multiline secret. Add one VPS per line:
 
-`VPS_SSH_KEY` must be a private key that can SSH into the server. Do not paste it into code or logs.
+```text
+name|user|host|port
+```
+
+Example:
+
+```text
+main|root|203.0.113.10|22
+backup|ubuntu|203.0.113.11|2222
+test|root|example.com|22
+```
+
+Lines starting with `#` are ignored.
+
+`VPS_SSH_KEY` must be a private key that can SSH into all listed servers. Do not paste it into code or logs.
 
 ## Recommended SSH key
 
@@ -64,6 +76,8 @@ Add the public key to the VPS:
 ```bash
 ssh-copy-id -i ~/.ssh/vps_watch_key.pub user@host
 ```
+
+Repeat this for every VPS, changing `user@host`.
 
 Then put the private key content into the GitHub secret:
 

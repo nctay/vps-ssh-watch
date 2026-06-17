@@ -21,32 +21,39 @@ jobs:
           chmod 600 ~/.ssh/vps_key
 
       - name: Check SSH
-        id: ssh
-        continue-on-error: true
         env:
-          VPS_HOST: ${{ secrets.VPS_HOST }}
-          VPS_USER: ${{ secrets.VPS_USER }}
-          VPS_PORT: ${{ secrets.VPS_PORT }}
-        run: |
-          ssh \
-            -i ~/.ssh/vps_key \
-            -p "${VPS_PORT:-22}" \
-            -o BatchMode=yes \
-            -o ConnectTimeout=8 \
-            -o ConnectionAttempts=2 \
-            -o StrictHostKeyChecking=no \
-            -o UserKnownHostsFile=/dev/null \
-            "$VPS_USER@$VPS_HOST" \
-            "true"
-
-      - name: Notify Telegram on failure
-        if: steps.ssh.outcome != 'success'
-        env:
+          VPS_LIST: ${{ secrets.VPS_LIST }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          VPS_HOST: ${{ secrets.VPS_HOST }}
         run: |
-          text="VPS SSH DOWN: ${VPS_HOST} at $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
-          curl -fsS -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
-            -d "chat_id=${TELEGRAM_CHAT_ID}" \
-            --data-urlencode "text=${text}"
+          failed=0
+
+          while IFS='|' read -r name user host port; do
+            if [ -z "$name" ] || [ "${name#\#}" != "$name" ]; then
+              continue
+            fi
+
+            port="${port:-22}"
+            echo "Checking ${name} (${user}@${host}:${port})"
+
+            if ssh \
+              -i ~/.ssh/vps_key \
+              -p "$port" \
+              -o BatchMode=yes \
+              -o ConnectTimeout=8 \
+              -o ConnectionAttempts=2 \
+              -o StrictHostKeyChecking=no \
+              -o UserKnownHostsFile=/dev/null \
+              "$user@$host" \
+              "true"; then
+              echo "${name}: OK"
+            else
+              failed=1
+              text="VPS SSH DOWN: ${name} (${host}) at $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+              curl -fsS -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+                -d "chat_id=${TELEGRAM_CHAT_ID}" \
+                --data-urlencode "text=${text}"
+            fi
+          done <<< "$VPS_LIST"
+
+          exit "$failed"
